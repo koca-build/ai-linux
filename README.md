@@ -2,9 +2,6 @@
 
 This repository contains `.deb` and `.rpm` repositories for various AI-related tools and applications on Linux. Packages are automatically built and published to Debian and RPM repositories hosted via GitHub Pages.
 
-[![claude-code](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fai-linux.koca.dev%2Fversions.json&query=%24.%22claude-code%22&label=claude-code&color=orange)](https://ai-linux.koca.dev)
-[![gemini-cli](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fai-linux.koca.dev%2Fversions.json&query=%24.%22gemini-cli%22&label=gemini-cli&color=purple)](https://ai-linux.koca.dev)
-
 ## Installation
 
 ### Debian/Ubuntu
