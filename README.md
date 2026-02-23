@@ -2,10 +2,6 @@
 
 This repository contains `.deb` and `.rpm` repositories for various AI-related tools and applications on Linux. Packages are automatically built and published to Debian and RPM repositories hosted via GitHub Pages.
 
-## Disclaimer
-
-**The Gemini CLI package is currently not working.**
-
 ## Installation
 
 ### Debian/Ubuntu
@@ -15,7 +11,8 @@ To use this repository on your Debian-based system (Ubuntu, Linux Mint, Debian, 
 #### 1. Add the Repository
 
 ```bash
-echo "deb [trusted=yes] https://ai-linux.koca.dev/deb stable main" | sudo tee /etc/apt/sources.list.d/ai-linux.list
+wget -qO - https://ai-linux.koca.dev/repo.key | gpg --dearmor | sudo tee /usr/share/keyrings/ai-linux.gpg > /dev/null
+sudo sh -c 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ai-linux.gpg] https://ai-linux.koca.dev/deb stable main" > /etc/apt/sources.list.d/ai-linux.list'
 ```
 
 #### 2. Update and Install
@@ -33,14 +30,9 @@ To use this repository on your RPM-based system (Fedora, CentOS, RHEL, etc.), fo
 
 #### 1. Add the Repository
 
-Create a file named `/etc/yum.repos.d/ai-linux.repo` with the following content:
-
-```
-[ai-linux]
-name=ai-linux repository
-baseurl=https://ai-linux.koca.dev/rpm
-enabled=1
-gpgcheck=0
+```bash
+sudo rpm --import https://ai-linux.koca.dev/repo.key
+sudo sh -c 'echo -e "[ai-linux]\nname=ai-linux repository\nbaseurl=https://ai-linux.koca.dev/rpm\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://ai-linux.koca.dev/repo.key" > /etc/yum.repos.d/ai-linux.repo'
 ```
 
 #### 2. Install

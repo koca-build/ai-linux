@@ -107,13 +107,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+      - name: Export GPG Public Key
+        run: gpg --export --armor "${{ secrets.GPG_KEY_ID }}" > gpg-signing.key
+      - name: Upload GPG Public Key
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpg-key
+          path: gpg-signing.key
       - name: Setup Pages
         uses: actions/configure-pages@v4
-
       - name: Create Debian repository structure
         run: mkdir -p deb/pool/main
-
       - name: Download all latest .deb packages
         run: |
           for koca_file in koca/*.koca; do
@@ -126,7 +132,6 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create Debian repository metadata
         run: |
           if [ -z "$(ls -A deb/pool/main 2>/dev/null)" ]; then
@@ -134,13 +139,14 @@ jobs:
             exit 0
           fi
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev
+          sudo apt-get install -y dpkg-dev gnupg
           cd deb
           mkdir -p dists/stable/main/binary-amd64
           dpkg-scanpackages pool/main /dev/null > dists/stable/main/binary-amd64/Packages
           gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
-          
-          cat <<EOF > dists/stable/main/Release
+          (
+            cd dists/stable
+            cat <<EOF > Release
           Origin: ${{ github.repository_owner }}
           Label: ${{ github.repository_owner }}
           Suite: stable
@@ -151,13 +157,16 @@ jobs:
           Description: ${{ github.repository_owner }}'s Debian repository
           Date: $(date -uR)
           MD5Sum:
-           $(md5sum dists/stable/main/binary-amd64/Packages | awk '{print $1}') $(wc -c < dists/stable/main/binary-amd64/Packages) main/binary-amd64/Packages
-           $(md5sum dists/stable/main/binary-amd64/Packages.gz | awk '{print $1}') $(wc -c < dists/stable/main/binary-amd64/Packages.gz) main/binary-amd64/Packages.gz
+           $(md5sum main/binary-amd64/Packages | awk '{print $1}') $(wc -c < main/binary-amd64/Packages) main/binary-amd64/Packages
+           $(md5sum main/binary-amd64/Packages.gz | awk '{print $1}') $(wc -c < main/binary-amd64/Packages.gz) main/binary-amd64/Packages.gz
           SHA256:
-           $(sha256sum dists/stable/main/binary-amd64/Packages | awk '{print $1}') $(wc -c < dists/stable/main/binary-amd64/Packages) main/binary-amd64/Packages
-           $(sha256sum dists/stable/main/binary-amd64/Packages.gz | awk '{print $1}') $(wc -c < dists/stable/main/binary-amd64/Packages.gz) main/binary-amd64/Packages.gz
+           $(sha256sum main/binary-amd64/Packages | awk '{print $1}') $(wc -c < main/binary-amd64/Packages) main/binary-amd64/Packages
+           $(sha256sum main/binary-amd64/Packages.gz | awk '{print $1}') $(wc -c < main/binary-amd64/Packages.gz) main/binary-amd64/Packages.gz
           EOF
-
+          )
+          cd dists/stable
+          gpg --clearsign --batch --yes --pinentry-mode loopback -u "${{ secrets.GPG_KEY_ID }}" -o InRelease Release
+          gpg -abs --batch --yes --pinentry-mode loopback -u "${{ secrets.GPG_KEY_ID }}" -o Release.gpg Release
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -171,13 +180,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
       - name: Setup Pages
         uses: actions/configure-pages@v4
-
       - name: Create RPM repository structure
         run: mkdir -p rpm/x86_64
-
       - name: Download all latest .rpm packages
         run: |
           for koca_file in koca/*.koca; do
@@ -190,7 +198,6 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create RPM repository metadata
         run: |
           if [ -z "$(ls -A rpm/x86_64 2>/dev/null)" ]; then
@@ -198,9 +205,9 @@ jobs:
             exit 0
           fi
           sudo apt-get update
-          sudo apt-get install -y createrepo-c
+          sudo apt-get install -y createrepo-c gnupg
           createrepo_c rpm
-
+          gpg --batch --yes --pinentry-mode loopback --detach-sign --armor -u "${{ secrets.GPG_KEY_ID }}" rpm/repodata/repomd.xml
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -224,18 +231,22 @@ jobs:
         with:
           name: deb-repo
           path: pages/deb
-
       - name: Download rpm repository
         uses: actions/download-artifact@v4
         with:
           name: rpm-repo
           path: pages/rpm
-
+      - name: Download GPG public key
+        uses: actions/download-artifact@v4
+        with:
+          name: gpg-key
+          path: pages/
+      - name: Rename GPG key for deployment
+        run: mv pages/gpg-signing.key pages/repo.key
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: ./pages
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
