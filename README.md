@@ -34,7 +34,6 @@ To use this repository on your RPM-based system (Fedora, CentOS, RHEL, etc.), fo
 #### 1. Add the Repository
 
 ```bash
-sudo rpm --import https://ai-linux.koca.dev/repo.key
 sudo sh -c 'echo -e "[ai-linux]\nname=ai-linux repository\nbaseurl=https://ai-linux.koca.dev/rpm\nenabled=1\ngpgcheck=0\nrepo_gpgcheck=0" > /etc/yum.repos.d/ai-linux.repo'
 ```
 
