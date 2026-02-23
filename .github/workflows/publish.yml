@@ -258,6 +258,25 @@ jobs:
           path: pages/
       - name: Rename GPG key for deployment
         run: mv pages/gpg-signing.key pages/repo.key
+      - name: Generate package versions JSON
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          {
+            echo "{"
+            first=1
+            while IFS= read -r pkg; do
+              name=$(rpm -qp --qf '%{NAME}' "$pkg")
+              version=$(rpm -qp --qf '%{VERSION}' "$pkg")
+              if [ "$first" -eq 0 ]; then
+                echo ","
+              fi
+              printf '  "%s": "%s"' "$name" "$version"
+              first=0
+            done < <(find pages/rpm/x86_64 -maxdepth 1 -type f -name '*.rpm' | sort)
+            echo
+            echo "}"
+          } > pages/versions.json
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
