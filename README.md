@@ -34,8 +34,10 @@ To use this repository on your RPM-based system (Fedora, CentOS, RHEL, etc.), fo
 #### 1. Add the Repository
 
 ```bash
-sudo rpm --import https://ai-linux.koca.dev/repo.key
-sudo sh -c 'echo -e "[ai-linux]\nname=ai-linux repository\nbaseurl=https://ai-linux.koca.dev/rpm\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://ai-linux.koca.dev/repo.key" > /etc/yum.repos.d/ai-linux.repo'
+sudo install -d -m 0755 /etc/pki/rpm-gpg
+sudo curl -fsSL https://ai-linux.koca.dev/repo.key -o /etc/pki/rpm-gpg/RPM-GPG-KEY-ai-linux
+sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-ai-linux
+sudo sh -c 'echo -e "[ai-linux]\nname=ai-linux repository\nbaseurl=https://ai-linux.koca.dev/rpm\nenabled=1\ngpgcheck=0\nrepo_gpgcheck=1\ngpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ai-linux" > /etc/yum.repos.d/ai-linux.repo'
 ```
 
 #### 2. Install
@@ -43,6 +45,8 @@ sudo sh -c 'echo -e "[ai-linux]\nname=ai-linux repository\nbaseurl=https://ai-li
 After adding the repository, you can install the desired packages:
 
 ```bash
+sudo dnf clean all
+sudo dnf makecache --refresh
 sudo dnf install <package-name>
 ```
 
