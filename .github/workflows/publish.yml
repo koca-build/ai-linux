@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'koca/**.koca'
 
 permissions:
   contents: read
@@ -43,13 +41,15 @@ jobs:
         run: apt-get update && apt-get install -y curl unzip
 
       - name: Build with Koca
-        run: koca create "koca/${{ matrix.koca-name }}.koca" --output-type deb
+        run: koca create "koca/${{ matrix.koca-name }}.koca" --output-type all
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.koca-name }}
-          path: "*.deb"
+          path: |
+            *.deb
+            *.rpm
 
   release:
     needs: [discover, build]
@@ -97,11 +97,10 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "${{ steps.package-info.outputs.pkgname }}@${{ steps.package-info.outputs.pkgver }}" \
             --notes "Release for \`${{ steps.package-info.outputs.pkgname }}@${{ steps.package-info.outputs.pkgver }}\`" \
-            *.deb
+            *.deb *.rpm
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-repo:
+  publish-deb-repo:
     needs: [discover, release]
     runs-on: ubuntu-latest
     if: success()
@@ -113,7 +112,7 @@ jobs:
         uses: actions/configure-pages@v4
 
       - name: Create Debian repository structure
-        run: mkdir -p debian-repo/pool/main
+        run: mkdir -p deb/pool/main
 
       - name: Download all latest .deb packages
         run: |
@@ -122,7 +121,7 @@ jobs:
             # Find the latest release for this package
             latest_tag=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq ".[] | .tagName" | grep "^${pkgname}-" || true)
             if [ -n "$latest_tag" ]; then
-              gh release download "$latest_tag" --repo "${{ github.repository }}" --pattern "*.deb" --dir "debian-repo/pool/main"
+              gh release download "$latest_tag" --repo "${{ github.repository }}" --pattern "*.deb" --dir "deb/pool/main"
             fi
           done
         env:
@@ -130,13 +129,13 @@ jobs:
 
       - name: Create Debian repository metadata
         run: |
-          if [ -z "$(ls -A debian-repo/pool/main 2>/dev/null)" ]; then
+          if [ -z "$(ls -A deb/pool/main 2>/dev/null)" ]; then
             echo "No packages found to publish."
             exit 0
           fi
           sudo apt-get update
           sudo apt-get install -y dpkg-dev
-          cd debian-repo
+          cd deb
           mkdir -p dists/stable/main/binary-amd64
           dpkg-scanpackages pool/main /dev/null > dists/stable/main/binary-amd64/Packages
           gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
@@ -162,8 +161,62 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./debian-repo
+          path: ./deb
 
+  publish-rpm-repo:
+    needs: [discover, release]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Create RPM repository structure
+        run: mkdir -p rpm/x86_64
+
+      - name: Download all latest .rpm packages
+        run: |
+          for koca_file in koca/*.koca; do
+            pkgname=$(grep -E '^pkgname=' "$koca_file" | cut -d'=' -f2)
+            # Find the latest release for this package
+            latest_tag=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq ".[] | .tagName" | grep "^${pkgname}-" || true)
+            if [ -n "$latest_tag" ]; then
+              gh release download "$latest_tag" --repo "${{ github.repository }}" --pattern "*.rpm" --dir "rpm/x86_64"
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create RPM repository metadata
+        run: |
+          if [ -z "$(ls -A rpm/x86_64 2>/dev/null)" ]; then
+            echo "No packages found to publish."
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install -y createrepo-c
+          createrepo_c rpm
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./rpm
+
+  publish-pages:
+    name: Publish to GitHub Pages
+    needs: [publish-deb-repo, publish-rpm-repo]
+    runs-on: ubuntu-latest
+    if: success()
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
