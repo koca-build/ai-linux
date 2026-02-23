@@ -122,12 +122,14 @@ jobs:
         run: mkdir -p deb/pool/main
       - name: Download all latest .deb packages
         run: |
+          all_tags=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName')
           for koca_file in koca/*.koca; do
             pkgname=$(grep -E '^pkgname=' "$koca_file" | cut -d'=' -f2)
-            # Find the latest release for this package
-            latest_tag=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq ".[] | .tagName" | grep "^${pkgname}-" || true)
+            latest_tag=$(printf '%s\n' "$all_tags" | grep "^${pkgname}-" | head -n1 || true)
             if [ -n "$latest_tag" ]; then
               gh release download "$latest_tag" --repo "${{ github.repository }}" --pattern "*.deb" --dir "deb/pool/main"
+            else
+              echo "No release tag found for ${pkgname}; skipping."
             fi
           done
         env:
@@ -188,12 +190,14 @@ jobs:
         run: mkdir -p rpm/x86_64
       - name: Download all latest .rpm packages
         run: |
+          all_tags=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName')
           for koca_file in koca/*.koca; do
             pkgname=$(grep -E '^pkgname=' "$koca_file" | cut -d'=' -f2)
-            # Find the latest release for this package
-            latest_tag=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq ".[] | .tagName" | grep "^${pkgname}-" || true)
+            latest_tag=$(printf '%s\n' "$all_tags" | grep "^${pkgname}-" | head -n1 || true)
             if [ -n "$latest_tag" ]; then
               gh release download "$latest_tag" --repo "${{ github.repository }}" --pattern "*.rpm" --dir "rpm/x86_64"
+            else
+              echo "No release tag found for ${pkgname}; skipping."
             fi
           done
         env:
@@ -205,7 +209,16 @@ jobs:
             exit 0
           fi
           sudo apt-get update
-          sudo apt-get install -y createrepo-c gnupg
+          sudo apt-get install -y createrepo-c gnupg rpm
+          cat <<EOF > ~/.rpmmacros
+%_signature gpg
+%_gpg_name ${{ secrets.GPG_KEY_ID }}
+%_gpg_path $HOME/.gnupg
+EOF
+          for pkg in rpm/x86_64/*.rpm; do
+            rpmsign --addsign "$pkg"
+          done
+          rpm -Kv rpm/x86_64/*.rpm
           createrepo_c rpm
           gpg --batch --yes --pinentry-mode loopback --detach-sign --armor -u "${{ secrets.GPG_KEY_ID }}" rpm/repodata/repomd.xml
       - name: Upload artifact
